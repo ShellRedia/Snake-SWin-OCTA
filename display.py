@@ -6,6 +6,10 @@ from tqdm import tqdm
 import pandas as pd
 from collections import defaultdict
 import time
+import shutil
+from random import sample
+from scipy import ndimage
+from PIL import Image
 
 alpha = 0.5
 
@@ -20,6 +24,21 @@ to_yellow = lambda x: np.array([np.zeros_like(x), x, x]).transpose((1,2,0)).asty
 
 to_3ch = lambda x: np.array([x,x,x]).transpose((1,2,0)).astype(dtype=np.uint8)
 
+def remove_tiny_pieces(label, min_area=10):
+    structure = ndimage.generate_binary_structure(2, 2)
+    labelmaps, connected_num = ndimage.label(label, structure=structure)
+
+    component_sizes = np.bincount(labelmaps.ravel())[1:]
+    tiny_components_labels = np.where(component_sizes < min_area)[0] + 1
+
+    for label in tiny_components_labels:
+        labelmaps[labelmaps == label] = 0
+    labelmaps[labelmaps > 0] = 255
+
+    return labelmaps
+
+
+
 def show_result_sample_figure(image, label, pred):
     cvt_img = lambda x: x.astype(np.uint8)
     image, label, pred = map(cvt_img, (image, label, pred))
@@ -27,6 +46,7 @@ def show_result_sample_figure(image, label, pred):
     else: image = image.transpose((1, 2, 0))
     label, pred = cv2.resize(label, image.shape[:2]), cv2.resize(pred, image.shape[:2])
     label_img = overlay(image, to_green(label))
+    pred = remove_tiny_pieces(pred)
     pred_img = overlay(image, to_yellow(pred))
 
     return np.concatenate((image, label_img, pred_img), axis=1)
@@ -133,12 +153,19 @@ def sample_comparison(sample_dirs):
         image_merge = np.concatenate(sample_lst, axis=1)
         cv2.imwrite("{}/{}".format(save_dir, file_name), image_merge)
 
+def make_gif_samples(image_dir, count=10):
+    frames = [Image.open(os.path.join(image_dir, img)) for img in sample(os.listdir(image_dir), count)]
+    frames[0].save("output.gif", format='GIF', append_images=frames[1:], save_all=True, duration=1000, loop=0)
 
+    
 
 if __name__=="__main__":
     # display
-    result_dir = r"results\2024-04-27-19-55-46\SwinSnake_Alter_3_11_1_72_MaxPooling_1_True_3M_FAZ_100_#\0100"
+
+    result_dir = "results/2024-04-25-10-42-47/SwinSnake_V2_3_9_1_72_MaxPooling_1_False_3M_LargeVessel_100_#/0100"
     view_result_samples(result_dir)
+
+    # make_gif_samples("sample_display/2024-04-25-10-42-47/SwinSnake_V2_3_9_1_72_MaxPooling_1_False_3M_LargeVessel_100_#/0100")
 
     # contrast
 
